@@ -1,0 +1,114 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "Execute_JavaScript_Code": {
+                "type": "JavaScriptCode",
+                "inputs": {
+                    "code": "var data = workflowContext.actions.Blob_content.outputs.data;\r\n\r\nvar row = data.split(\"\\r\\n\");\r\nvar output = [];\r\n\r\nfor(i=0; i<row.length; i++){\r\n    \r\n    var col_names = row[0].toLowerCase().split(',');\r\n    var json = {};\r\n\r\n    if(i!=0){\r\n        for(j=0; j<col_names.length; j++){\r\n            col = row[i].split(',');\r\n            json[col_names[j]] = col[j];        \r\n        }\r\n        output.push(json);\r\n    }\r\n}\r\n\r\nreturn output;"
+                },
+                "runAfter": {
+                    "Blob_content": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "For_each": {
+                "type": "Foreach",
+                "foreach": "@outputs('Execute_JavaScript_Code')",
+                "actions": {
+                    "Compose": {
+                        "type": "Compose",
+                        "inputs": {
+                            "row": "@items('For_each')"
+                        },
+                        "runAfter": {}
+                    },
+                    "Transform_XML": {
+                        "type": "Xslt",
+                        "inputs": {
+                            "content": "@xml(outputs('Compose'))",
+                            "map": {
+                                "name": "map.xslt"
+                            }
+                        },
+                        "runAfter": {
+                            "Compose": [
+                                "Succeeded"
+                            ]
+                        }
+                    },
+                    "Uploads_a_Blob_to_Azure_Storage": {
+                        "type": "ServiceProvider",
+                        "inputs": {
+                            "parameters": {
+                                "containerName": "xml-files",
+                                "blobName": "@{items('For_each')['mtccode']}.xml",
+                                "content": "@body('Transform_XML')"
+                            },
+                            "serviceProviderConfiguration": {
+                                "connectionName": "AzureBlob",
+                                "operationId": "uploadBlob",
+                                "serviceProviderId": "/serviceProviders/AzureBlob"
+                            }
+                        },
+                        "runAfter": {
+                            "Transform_XML": [
+                                "Succeeded"
+                            ]
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Execute_JavaScript_Code": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Reads_Blob_Content_from_Azure_Storage": {
+                "type": "ServiceProvider",
+                "inputs": {
+                    "parameters": {
+                        "containerName": "@triggerOutputs()?['body']?['containerInfo']?['name']",
+                        "blobName": "@triggerOutputs()?['body']?['name']"
+                    },
+                    "serviceProviderConfiguration": {
+                        "connectionName": "AzureBlob",
+                        "operationId": "readBlob",
+                        "serviceProviderId": "/serviceProviders/AzureBlob"
+                    }
+                },
+                "runAfter": {}
+            },
+            "Blob_content": {
+                "type": "Compose",
+                "inputs": {
+                    "data": "@base64ToString(outputs('Reads_Blob_Content_from_Azure_Storage')?['body']?['content'].$content)"
+                },
+                "runAfter": {
+                    "Reads_Blob_Content_from_Azure_Storage": [
+                        "Succeeded"
+                    ]
+                }
+            }
+        },
+        "triggers": {
+            "When_a_blob_is_Added_or_Modified_in_Azure_Storage": {
+                "type": "ServiceProvider",
+                "inputs": {
+                    "parameters": {
+                        "path": "csv-files"
+                    },
+                    "serviceProviderConfiguration": {
+                        "connectionName": "AzureBlob",
+                        "operationId": "whenABlobIsAddedOrModified",
+                        "serviceProviderId": "/serviceProviders/AzureBlob"
+                    }
+                }
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {}
+    },
+    "kind": "Stateful"
+}

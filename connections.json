@@ -1,0 +1,14 @@
+{
+  "serviceProviderConnections": {
+    "AzureBlob": {
+      "parameterValues": {
+        "connectionString": "@appsetting('AzureBlob_connectionString')"
+      },
+      "serviceProvider": {
+        "id": "/serviceProviders/AzureBlob"
+      },
+      "displayName": "murnstorage"
+    }
+  },
+  "managedApiConnections": {}
+}
